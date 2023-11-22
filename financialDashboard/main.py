@@ -10,90 +10,72 @@ from bokeh.layouts import row, column
 from bokeh.models import TextInput, Button, DatePicker, MultiChoice
 
 
-def loadData(ticker1, ticker2, start, end):
+def load_data(ticker1, ticker2, start, end):
     """
     """
-    dataFrame1 = download(ticker1, start, end)
-    dataFrame2 = download(ticker2, start, end)
-
-    if dataFrame1.empty or dataFrame2.empty:
-        raise ValueError(
-            "No data available for the specified tickers and dates")
-
-    return dataFrame1, dataFrame2
+    df1 = download(ticker1, start, end)
+    df2 = download(ticker2, start, end)
+    return df1, df2
 
 
-def getFigureResult(sync_axis):
+def plot_data(data, indicators, sync_axis=None):
     """
     """
+    df = data
+    gain = df.Close > df.Open
+    loss = df.Open > df.Close
+    width = 12 * 60 * 60 * 1000
     if sync_axis is not None:
-        return figure(
-            x_axis_type="datetime",
-            tools="pan, wheel_zoom, box_zoom, reset, save", width=1000,
-            x_range=sync_axis)
-    return figure(
-        x_axis_type="datetime",
-        tools="pan, wheel_zoom, box_zoom, reset, save", width=1000)
+        p = figure(x_axis_type="datetime",
+                   tools="pan,wheel_zoom,box_zoom,reset,save",
+                   width=1000,
+                   x_range=sync_axis)
+    else:
+        p = figure(x_axis_type="datetime",
+                   tools="pan,wheel_zoom,box_zoom,reset,save",
+                   width=1000)
+    p.xaxis.major_label_orientation = pi / 4
+    p.grid.grid_line_alpha = 0.25
+
+    p.segment(df.index, df.High, df.index, df.Low, color="black")
+    p.vbar(df.index[gain], width, df.Open[gain], df.Close[gain],
+           fill_color="#00ff00",
+           line_color="#00ff00")
+    p.vbar(df.index[loss], width, df.Open[loss], df.Close[loss],
+           fill_color="#ff0000",
+           line_color="#ff0000")
+    return p
 
 
-def plotDatas(data, indicators, sync_axis=None):
+def on_button_click(ticker1, ticker2, start, end, indicators):
     """
     """
-    dataFrame = data
-    gain = dataFrame.Close > dataFrame.Open
-    loss = dataFrame.Open > dataFrame.Close
-    width = 43200000
-    figureResult = getFigureResult(sync_axis)
-    print(figureResult)
-    figureResult.x_asis.major_label_orientation = pi / 4
-    figureResult.grid.grid_line_alpha = 0.25
-    figureResult.segment(dataFrame.index, dataFrame.High,
-                         dataFrame.index, dataFrame.Low, color="black")
-    figureResult.vbar(dataFrame.index[gain], width,
-                      dataFrame.Open[gain], dataFrame.Close[gain], fill_color="#00ff00",
-                      line_color="#00ff00")
-    figureResult.vbar(dataFrame.index[loss], width,
-                      dataFrame.Open[loss], dataFrame.Close[loss], fill_color="#ff0000",
-                      line_color="#ff0000")
-    return figureResult
-
-
-def onButtonClick(ticker1, ticker2, start, end, indicators):
-    """
-    """
-    dataFrame1, dataFrame2 = loadData(ticker1, ticker2, start, end)
-    plot1 = plotDatas(dataFrame1, indicators)
-    plot2 = plotDatas(dataFrame2, indicators, sync_axis=plot1.x_range)
+    df1, df2 = load_data(ticker1, ticker2, start, end)
+    p1 = plot_data(df1, indicators)
+    p2 = plot_data(df2, indicators, sync_axis=p1.x_range)
     curdoc().clear()
     curdoc().add_root(layout)
-    curdoc().add_root(row(plot1, plot2))
+    curdoc().add_root(row(p1, p2))
 
 
-stockText1 = TextInput(title="Stock 1")
-stockText2 = TextInput(title="Stock 2")
-dataPickerFrom = DatePicker(
-    title="Start Date",
-    value="2020-01-01",
-    min_date="2000-01-01",
-    max_date=dt.date.today()
-)
+stock1_text = TextInput(title="Stock 1")
+stock2_text = TextInput(title="Stock 2")
+date_picker_from = DatePicker(title="Start Date", value="2020-01-01", min_date="2000-01-01",
+                              max_date=dt.datetime.now().strftime("%Y-%m-%d"))
 
-dataPickerTo = DatePicker(
-    title="End Date",
-    value="2020-02-01",
-    min_date="2000-01-01",
-    max_date=dt.date.today()
-)
+date_picker_to = DatePicker(title="End Date", value="2020-02-01", min_date="2000-01-01",
+                            max_date=dt.datetime.now().strftime("%Y-%m-%d"))
 
-indicatorsCHoice = MultiChoice(
+indicators_choice = MultiChoice(
     options=["100 Day SMA", "30 Day SMA", "Linear Regression Line"])
 
-loadButton = Button(label="Load Data", button_type="success")
-loadButton.on_click(lambda: onButtonClick(stockText1.value, stockText2.value,
-                                          dataPickerFrom.value, dataPickerTo.value,
-                                          indicatorsCHoice.value))
-layout = column(stockText1, stockText2, dataPickerFrom,
-                dataPickerTo, indicatorsCHoice, loadButton)
+load_button = Button(
+    label="Load Data", button_type="success")
+load_button.on_click(lambda: on_button_click(stock1_text.value, stock2_text.value,
+                                             date_picker_from.value, date_picker_to.value,
+                                             indicators_choice.value))
+layout = column(stock1_text, stock2_text, date_picker_from,
+                date_picker_to, indicators_choice, load_button)
 
-# curdoc().clear()
+curdoc().clear()
 curdoc().add_root(layout)
